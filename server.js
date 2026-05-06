@@ -1,10 +1,5 @@
-process.on('uncaughtException', err => {
-  console.log("CRASH ERROR:", err);
-});
-
-process.on('unhandledRejection', err => {
-  console.log("PROMISE ERROR:", err);
-});
+process.on('uncaughtException', err => console.log("CRASH:", err));
+process.on('unhandledRejection', err => console.log("PROMISE:", err));
 
 const express = require("express");
 const axios = require("axios");
@@ -17,12 +12,14 @@ app.use(express.json());
 const ADMIN_PASSWORD = "admin123";
 const MAIN_API_KEY = "unknown34";
 
-// ===== IN-MEMORY DB =====
+// ===== MEMORY DB =====
 let users = {};
 let sessions = {};
 
 // ===== HELPERS =====
-const hashKey = (k) => crypto.createHash("sha256").update(k).digest("hex");
+const hashKey = (k) =>
+  crypto.createHash("sha256").update(String(k)).digest("hex");
+
 const now = () => Date.now();
 
 // ===== RATE LIMIT =====
@@ -53,67 +50,62 @@ function makeSession(res) {
 
 function checkSession(req) {
   const cookie = req.headers.cookie || "";
-
   if (!cookie.includes("sid=")) return false;
 
   const sid = cookie.split("sid=")[1].split(";")[0];
-
-  return sessions[sid] || false;
+  return sessions[sid] === true;
 }
 
-// ===== HOME =====
+// ================= HOME =================
 app.get("/", (req, res) => {
   res.send(`
-  <h2>🚀 API SYSTEM RUNNING</h2>
-  <a href="/admin">Admin</a> | <a href="/user">User</a>
+  <h2>🚀 API SYSTEM</h2>
+  <a href="/admin">Admin Panel</a> | <a href="/user">User Panel</a>
   `);
 });
 
-// ===== ADMIN LOGIN =====
+// ================= ADMIN LOGIN =================
 app.get("/admin/login", (req, res) => {
-  const { pass } = req.query;
-
-  if (pass === ADMIN_PASSWORD) {
+  if (req.query.pass === ADMIN_PASSWORD) {
     makeSession(res);
     return res.json({ ok: true });
   }
-
   res.json({ ok: false });
 });
 
-// ===== ADMIN PANEL =====
+// ================= ADMIN PANEL =================
 app.get("/admin", (req, res) => {
-
   if (!checkSession(req)) {
     return res.send(`
-    <h3>Admin Login</h3>
-    <input id="p" placeholder="Password">
-    <button onclick="l()">Login</button>
+      <h3>Admin Login</h3>
+      <input id="p" placeholder="password">
+      <button onclick="l()">Login</button>
 
-    <script>
-    function l(){
-      fetch('/admin/login?pass='+p.value)
-      .then(r=>r.json())
-      .then(d=>{
-        if(d.ok) location.reload();
-        else alert("Wrong password");
-      });
-    }
-    </script>
+      <script>
+      function l(){
+        fetch('/admin/login?pass='+p.value)
+        .then(r=>r.json())
+        .then(d=>{
+          if(d.ok) location.reload();
+          else alert("Wrong");
+        });
+      }
+      </script>
     `);
   }
 
   res.send(`
   <html>
-  <body style="background:#111;color:#fff;text-align:center;font-family:sans-serif">
+  <body style="background:#0f172a;color:#fff;font-family:sans-serif;text-align:center">
 
-  <h2>Admin Panel</h2>
+  <h2>🔥 Admin Panel</h2>
 
   <input id="label" placeholder="Label"><br>
   <input id="key" placeholder="API Key"><br>
   <input id="limit" placeholder="Limit"><br>
   <input id="days" placeholder="Days"><br>
-  <button onclick="create()">Create</button>
+
+  <button onclick="create()">Create Key</button>
 
   <h3>Users</h3>
   <pre id="out"></pre>
@@ -125,22 +117,11 @@ app.get("/admin", (req, res) => {
     .then(()=>load());
   }
 
-  function del(k){
-    fetch('/admin/delete?key='+k)
-    .then(()=>load());
-  }
-
   function load(){
     fetch('/admin/list')
     .then(r=>r.json())
     .then(d=>{
-      let txt = "";
-      Object.entries(d).forEach(([k,v])=>{
-        txt += "KEY: "+k+"\\n";
-        txt += JSON.stringify(v,null,2)+"\\n";
-        txt += "----------------------\\n";
-      });
-      out.innerText = txt;
+      out.innerText = JSON.stringify(d,null,2);
     });
   }
 
@@ -152,9 +133,9 @@ app.get("/admin", (req, res) => {
   `);
 });
 
-// ===== CREATE KEY =====
+// ================= CREATE KEY =================
 app.get("/admin/create", (req, res) => {
-  if (!checkSession(req)) return res.json({ error: "auth" });
+  if (!checkSession(req)) return res.json({ error: "auth failed" });
 
   const { label, key, limit, days } = req.query;
 
@@ -169,33 +150,30 @@ app.get("/admin/create", (req, res) => {
     limit: Number(limit),
     used: 0,
     expiry: now() + Number(days) * 86400000,
-    createdAt: now(),
+    lastHitAt: 0,
     hitsInWindow: 0
   };
 
   res.json({ status: "created", key });
 });
 
-// ===== LIST =====
+// ================= LIST =================
 app.get("/admin/list", (req, res) => {
   if (!checkSession(req)) return res.json({});
   res.json(users);
 });
 
-// ===== DELETE =====
+// ================= DELETE =================
 app.get("/admin/delete", (req, res) => {
   if (!checkSession(req)) return res.json({ error: "auth" });
 
   const key = req.query.key;
-
-  if (!key) return res.json({ error: "missing key" });
-
   delete users[hashKey(key)];
 
   res.json({ status: "deleted" });
 });
 
-// ===== USER PANEL =====
+// ================= USER PANEL =================
 app.get("/user", (req, res) => {
   res.send(`
   <html>
@@ -203,13 +181,13 @@ app.get("/user", (req, res) => {
 
   <h2>User Panel</h2>
 
-  <input id="k" placeholder="Enter API Key">
-  <button onclick="c()">Check</button>
+  <input id="k" placeholder="API Key">
+  <button onclick="check()">Check</button>
 
   <pre id="o"></pre>
 
   <script>
-  function c(){
+  function check(){
     fetch('/api/status?key='+k.value)
     .then(r=>r.json())
     .then(d=>{
@@ -223,15 +201,13 @@ app.get("/user", (req, res) => {
   `);
 });
 
-// ===== STATUS =====
+// ================= STATUS =================
 app.get("/api/status", (req, res) => {
   const key = req.query.key;
-
   if (!key) return res.json({ error: "missing key" });
 
   const u = users[hashKey(key)];
-
-  if (!u) return res.json({ status: "invalid" });
+  if (!u) return res.json({ status: "invalid key" });
 
   res.json({
     limit: u.limit,
@@ -241,7 +217,7 @@ app.get("/api/status", (req, res) => {
   });
 });
 
-// ===== SEND API =====
+// ================= API SEND =================
 app.get("/api/send", async (req, res) => {
   const { key, number, msg } = req.query;
 
@@ -252,9 +228,7 @@ app.get("/api/send", async (req, res) => {
   const u = users[hashKey(key)];
 
   if (!u) return res.json({ status: "invalid key" });
-
   if (now() > u.expiry) return res.json({ status: "expired" });
-
   if (u.used >= u.limit) return res.json({ status: "limit reached" });
 
   if (!checkRateLimit(u)) {
@@ -264,7 +238,7 @@ app.get("/api/send", async (req, res) => {
   u.used++;
 
   try {
-    const url = `http://xlahr.pro.bd/Key/sub.php?key=unknown34&number=${number}&msg=${msg}`;
+    const url = `http://xlahr.pro.bd/Key/sub.php?key=${MAIN_API_KEY}&number=${number}&msg=${msg}`;
     const r = await axios.get(url);
 
     res.json({
@@ -279,6 +253,6 @@ app.get("/api/send", async (req, res) => {
   }
 });
 
-// ===== START =====
+// ================= START =================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("🚀 RUNNING OK"));
+app.listen(PORT, () => console.log("🚀 SYSTEM RUNNING"));
