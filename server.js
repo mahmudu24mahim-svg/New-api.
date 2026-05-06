@@ -17,12 +17,12 @@ mongoose.connect("mongodb+srv://Mahim125:125mahim@cluster0.t5lz8wx.mongodb.net/a
 // ================= HOME =================
 app.get("/", (req,res)=>{
   res.send(`
-  <h2>🚀 API SYSTEM</h2>
-  <a href="/admin">Admin Panel</a> | <a href="/user">User Panel</a>
+    <h2>🚀 API SYSTEM</h2>
+    <a href="/admin">Admin Panel</a> | <a href="/user">User Panel</a>
   `);
 });
 
-// ================= ADMIN PANEL =================
+// ================= ADMIN =================
 app.get("/admin",(req,res)=>{
   res.send(`
 <!DOCTYPE html>
@@ -55,15 +55,8 @@ button{cursor:pointer;background:#06b6d4;color:#fff}
 <script>
 
 function create(){
-  const pass = document.getElementById("pass").value;
-  const key = document.getElementById("key").value;
-  const label = document.getElementById("label").value;
-  const limit = document.getElementById("limit").value;
-  const days = document.getElementById("days").value;
-
-  fetch(\`/admin/create?pass=\${pass}&key=\${key}&label=\${label}&limit=\${limit}&days=\${days}\`)
-  .then(r=>r.json())
-  .then(d=>{
+  fetch('/admin/create?pass='+pass.value+'&key='+key.value+'&label='+label.value+'&limit='+limit.value+'&days='+days.value)
+  .then(r=>r.json()).then(d=>{
     alert(JSON.stringify(d));
     load();
   });
@@ -73,28 +66,21 @@ function load(){
   fetch('/admin/list')
   .then(r=>r.json())
   .then(d=>{
-    let html = "";
-
+    let txt = "";
     d.forEach(v=>{
-      html += `
-        🔑 ${v.key}
-        📛 ${v.label}
-        📊 Limit: ${v.limit}
-        ⚡ Used: ${v.used}
-        ⏳ Expiry: ${new Date(v.expiry).toLocaleString()}
-        
-        <button onclick="del('${v.key}')">Delete</button>
-        -------------------
-      `;
+      txt += "KEY: "+v.key+"\n";
+      txt += "LABEL: "+v.label+"\n";
+      txt += "LIMIT: "+v.limit+"\n";
+      txt += "USED: "+v.used+"\n";
+      txt += "EXPIRE: "+new Date(v.expiry).toLocaleString()+"\n";
+      txt += "----------------------\n";
     });
-
-    out.innerText = html;
+    out.innerText = txt;
   });
 }
 
 function del(k){
-  const pass = document.getElementById("pass").value;
-  fetch(\`/admin/delete?pass=\${pass}&key=\${k}\`)
+  fetch('/admin/delete?pass='+pass.value+'&key='+k)
   .then(()=>load());
 }
 
@@ -105,27 +91,20 @@ function del(k){
   `);
 });
 
-// ================= CREATE KEY =================
+// ================= CREATE =================
 app.get("/admin/create", async (req,res)=>{
   const { pass,key,label,limit,days } = req.query;
 
-  if(pass !== ADMIN_PASS){
-    return res.json({ error:"wrong admin pass" });
-  }
+  if(pass !== ADMIN_PASS) return res.json({ error:"wrong pass" });
+  if(!key || !limit || !days) return res.json({ error:"missing" });
 
-  if(!key || !limit || !days){
-    return res.json({ error:"missing data" });
-  }
-
-  const user = new User({
+  await User.create({
     key,
     label: label || "user",
     limit: Number(limit),
     used: 0,
     expiry: Date.now() + Number(days)*86400000
   });
-
-  await user.save();
 
   res.json({ status:"created" });
 });
@@ -140,101 +119,73 @@ app.get("/admin/list", async (req,res)=>{
 app.get("/admin/delete", async (req,res)=>{
   const { pass,key } = req.query;
 
-  if(pass !== ADMIN_PASS){
-    return res.json({ error:"wrong pass" });
-  }
+  if(pass !== ADMIN_PASS) return res.json({ error:"wrong pass" });
 
   await User.deleteOne({ key });
 
   res.json({ status:"deleted" });
 });
 
-// ================= USER PANEL =================
+// ================= USER =================
 app.get("/user",(req,res)=>{
   res.send(`
 <!DOCTYPE html>
 <html>
 <head>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-
 <style>
 body{
-  margin:0;
+  background:#020617;
+  color:#fff;
   font-family:sans-serif;
-  background:linear-gradient(135deg,#0f172a,#020617);
-  color:white;
   text-align:center;
 }
-
 .card{
   width:360px;
   margin:80px auto;
   padding:20px;
-  background:rgba(255,255,255,0.05);
-  border-radius:15px;
+  background:#111827;
+  border-radius:12px;
 }
-
-input{
+input,button{
   width:90%;
   padding:10px;
-  margin:10px 0;
+  margin:8px;
   border:none;
   border-radius:8px;
-  text-align:center;
 }
-
-button{
-  width:95%;
-  padding:10px;
-  background:#06b6d4;
-  border:none;
-  border-radius:8px;
-  color:white;
-  cursor:pointer;
-}
-
-#out{
-  margin-top:10px;
-  text-align:left;
-  background:#111827;
-  padding:10px;
-  border-radius:10px;
-}
+button{background:#06b6d4;color:#fff}
+#out{margin-top:10px;text-align:left}
 </style>
 </head>
-
 <body>
 
 <div class="card">
+<h2>🔑 Key Checker</h2>
 
-<h2><i class="fa fa-key"></i> Key Checker</h2>
-
-<input id="k" placeholder="Enter API Key">
+<input id="k" placeholder="API Key">
 <button onclick="check()">Check</button>
 
 <div id="out">Enter key...</div>
-
 </div>
 
 <script>
 function check(){
-  fetch('/api/status?key='+document.getElementById("k").value)
+  fetch('/api/status?key='+k.value)
   .then(r=>r.json())
   .then(d=>{
 
-    if(d.status === "invalid key"){
-      out.innerHTML = "❌ Invalid Key";
+    if(d.status==="invalid key"){
+      out.innerHTML="❌ Invalid Key";
       return;
     }
 
-    out.innerHTML = `
-      🔑 Key: ${d.key}<br>
-      📛 Label: ${d.label}<br>
-      📊 Limit: ${d.limit}<br>
-      ⚡ Used: ${d.used}<br>
-      🟢 Remaining: ${d.remaining}<br>
-      ⏳ Expiry: ${d.expiry}
-    `;
+    out.innerHTML =
+    "KEY: "+d.key+"<br>"+
+    "LABEL: "+d.label+"<br>"+
+    "LIMIT: "+d.limit+"<br>"+
+    "USED: "+d.used+"<br>"+
+    "REMAINING: "+d.remaining+"<br>"+
+    "EXPIRE: "+d.expiry;
   });
 }
 </script>
@@ -248,9 +199,7 @@ function check(){
 app.get("/api/status", async (req,res)=>{
   const u = await User.findOne({ key:req.query.key });
 
-  if(!u){
-    return res.json({ status:"invalid key" });
-  }
+  if(!u) return res.json({ status:"invalid key" });
 
   res.json({
     key:u.key,
@@ -262,7 +211,7 @@ app.get("/api/status", async (req,res)=>{
   });
 });
 
-// ================= API SEND =================
+// ================= SEND =================
 app.get("/api/send", async (req,res)=>{
   const { key,number,msg } = req.query;
 
@@ -292,5 +241,6 @@ app.get("/api/send", async (req,res)=>{
 });
 
 // ================= START =================
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, ()=>console.log("🚀 SYSTEM RUNNING"));
+app.listen(process.env.PORT || 3000, ()=>{
+  console.log("🚀 SYSTEM RUNNING");
+});
