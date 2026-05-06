@@ -5,13 +5,15 @@ const User = require("./db");
 
 const app = express();
 
+app.use(express.json());
+
 // ===== CONFIG =====
 const ADMIN_PASS = "admin123";
 const MAIN_API_KEY = "unknown34";
 
 // ===== DB CONNECT =====
-mongoose.connect("mongodb+srv://Mahim125:125mahim@cluster0.t5lz8wx.mongodb.net/apiDB?retryWrites=true&w=majority")
-.then(()=>console.log("MongoDB Connected"))
+mongoose.connect("mongodb+srv://Mahim125:125mahim@cluster0.t5lz8wx.mongodb.net/apiDB")
+.then(()=>console.log("DB CONNECTED"))
 .catch(err=>console.log("DB ERROR:", err));
 
 // ================= HOME =================
@@ -22,7 +24,7 @@ app.get("/", (req,res)=>{
   `);
 });
 
-// ================= ADMIN =================
+// ================= ADMIN PANEL =================
 app.get("/admin",(req,res)=>{
   res.send(`
 <!DOCTYPE html>
@@ -31,15 +33,15 @@ app.get("/admin",(req,res)=>{
 <style>
 body{background:#0f172a;color:#fff;font-family:sans-serif;text-align:center}
 input,button{padding:10px;margin:5px;width:250px;border-radius:8px;border:none}
-button{cursor:pointer;background:#06b6d4;color:#fff}
-.box{margin-top:20px}
+button{background:#06b6d4;color:#fff;cursor:pointer}
+.card{margin-top:20px}
 </style>
 </head>
 <body>
 
 <h2>🔥 Admin Panel</h2>
 
-<div class="box">
+<div class="card">
 <input id="pass" placeholder="Admin Pass"><br>
 <input id="key" placeholder="API Key"><br>
 <input id="label" placeholder="Label"><br>
@@ -56,7 +58,8 @@ button{cursor:pointer;background:#06b6d4;color:#fff}
 
 function create(){
   fetch('/admin/create?pass='+pass.value+'&key='+key.value+'&label='+label.value+'&limit='+limit.value+'&days='+days.value)
-  .then(r=>r.json()).then(d=>{
+  .then(r=>r.json())
+  .then(d=>{
     alert(JSON.stringify(d));
     load();
   });
@@ -66,14 +69,14 @@ function load(){
   fetch('/admin/list')
   .then(r=>r.json())
   .then(d=>{
-    let txt = "";
+    let txt="";
     d.forEach(v=>{
-      txt += "KEY: "+v.key+"\n";
-      txt += "LABEL: "+v.label+"\n";
-      txt += "LIMIT: "+v.limit+"\n";
-      txt += "USED: "+v.used+"\n";
-      txt += "EXPIRE: "+new Date(v.expiry).toLocaleString()+"\n";
-      txt += "----------------------\n";
+      txt += "KEY: "+v.key+"\\n";
+      txt += "LABEL: "+v.label+"\\n";
+      txt += "LIMIT: "+v.limit+"\\n";
+      txt += "USED: "+v.used+"\\n";
+      txt += "EXPIRE: "+new Date(v.expiry).toLocaleString()+"\\n";
+      txt += "-------------------\\n";
     });
     out.innerText = txt;
   });
@@ -91,22 +94,34 @@ function del(k){
   `);
 });
 
-// ================= CREATE =================
+// ================= CREATE KEY =================
 app.get("/admin/create", async (req,res)=>{
-  const { pass,key,label,limit,days } = req.query;
+  try{
+    const { pass,key,label,limit,days } = req.query;
 
-  if(pass !== ADMIN_PASS) return res.json({ error:"wrong pass" });
-  if(!key || !limit || !days) return res.json({ error:"missing" });
+    if(pass !== ADMIN_PASS)
+      return res.json({ status:"error", msg:"wrong admin pass" });
 
-  await User.create({
-    key,
-    label: label || "user",
-    limit: Number(limit),
-    used: 0,
-    expiry: Date.now() + Number(days)*86400000
-  });
+    if(!key || !limit || !days)
+      return res.json({ status:"error", msg:"missing fields" });
 
-  res.json({ status:"created" });
+    const exist = await User.findOne({ key });
+    if(exist)
+      return res.json({ status:"error", msg:"key already exists" });
+
+    const user = await User.create({
+      key,
+      label: label || "user",
+      limit: Number(limit),
+      used: 0,
+      expiry: Date.now() + Number(days)*86400000
+    });
+
+    res.json({ status:"success", key:user.key });
+
+  }catch(e){
+    res.json({ status:"error", msg:e.message });
+  }
 });
 
 // ================= LIST =================
@@ -119,42 +134,26 @@ app.get("/admin/list", async (req,res)=>{
 app.get("/admin/delete", async (req,res)=>{
   const { pass,key } = req.query;
 
-  if(pass !== ADMIN_PASS) return res.json({ error:"wrong pass" });
+  if(pass !== ADMIN_PASS)
+    return res.json({ error:"wrong pass" });
 
   await User.deleteOne({ key });
 
   res.json({ status:"deleted" });
 });
 
-// ================= USER =================
+// ================= USER PANEL =================
 app.get("/user",(req,res)=>{
   res.send(`
 <!DOCTYPE html>
 <html>
 <head>
 <style>
-body{
-  background:#020617;
-  color:#fff;
-  font-family:sans-serif;
-  text-align:center;
-}
-.card{
-  width:360px;
-  margin:80px auto;
-  padding:20px;
-  background:#111827;
-  border-radius:12px;
-}
-input,button{
-  width:90%;
-  padding:10px;
-  margin:8px;
-  border:none;
-  border-radius:8px;
-}
+body{background:#020617;color:#fff;font-family:sans-serif;text-align:center}
+.card{width:360px;margin:80px auto;padding:20px;background:#111827;border-radius:12px}
+input,button{padding:10px;margin:8px;width:90%;border:none;border-radius:8px}
 button{background:#06b6d4;color:#fff}
-#out{margin-top:10px;text-align:left}
+#out{text-align:left;margin-top:10px}
 </style>
 </head>
 <body>
@@ -162,7 +161,7 @@ button{background:#06b6d4;color:#fff}
 <div class="card">
 <h2>🔑 Key Checker</h2>
 
-<input id="k" placeholder="API Key">
+<input id="k" placeholder="Enter Key">
 <button onclick="check()">Check</button>
 
 <div id="out">Enter key...</div>
@@ -184,7 +183,7 @@ function check(){
     "LABEL: "+d.label+"<br>"+
     "LIMIT: "+d.limit+"<br>"+
     "USED: "+d.used+"<br>"+
-    "REMAINING: "+d.remaining+"<br>"+
+    "REMAIN: "+d.remaining+"<br>"+
     "EXPIRE: "+d.expiry;
   });
 }
@@ -211,7 +210,7 @@ app.get("/api/status", async (req,res)=>{
   });
 });
 
-// ================= SEND =================
+// ================= SEND API =================
 app.get("/api/send", async (req,res)=>{
   const { key,number,msg } = req.query;
 
@@ -241,6 +240,5 @@ app.get("/api/send", async (req,res)=>{
 });
 
 // ================= START =================
-app.listen(process.env.PORT || 3000, ()=>{
-  console.log("🚀 SYSTEM RUNNING");
-});
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, ()=>console.log("🚀 SYSTEM RUNNING"));
