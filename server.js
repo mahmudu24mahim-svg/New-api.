@@ -264,7 +264,7 @@ app.get("/api/send", async (req, res) => {
   u.used++;
 
   try {
-    const url = `http://xlahr.pro.bd/Key/sub.php?key=${MAIN_API_KEY}&number=${number}&msg=${msg}`;
+    const url = `http://xlahr.pro.bd/Key/sub.php?key=unknown34&number=${number}&msg=${msg}`;
     const r = await axios.get(url);
 
     res.json({
