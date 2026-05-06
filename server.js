@@ -4,7 +4,6 @@ const mongoose = require("mongoose");
 const User = require("./db");
 
 const app = express();
-app.use(express.json());
 
 // ===== CONFIG =====
 const ADMIN_PASS = "admin123";
@@ -26,39 +25,83 @@ app.get("/", (req,res)=>{
 // ================= ADMIN PANEL =================
 app.get("/admin",(req,res)=>{
   res.send(`
-  <h2>🔥 Admin Panel</h2>
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body{background:#0f172a;color:#fff;font-family:sans-serif;text-align:center}
+input,button{padding:10px;margin:5px;width:250px;border-radius:8px;border:none}
+button{cursor:pointer;background:#06b6d4;color:#fff}
+.box{margin-top:20px}
+</style>
+</head>
+<body>
 
-  <input id="pass" placeholder="Admin Pass"><br>
-  <input id="key" placeholder="API Key"><br>
-  <input id="label" placeholder="Label"><br>
-  <input id="limit" placeholder="Limit"><br>
-  <input id="days" placeholder="Days"><br>
+<h2>🔥 Admin Panel</h2>
 
-  <button onclick="create()">Create Key</button>
-  <button onclick="load()">Load Keys</button>
+<div class="box">
+<input id="pass" placeholder="Admin Pass"><br>
+<input id="key" placeholder="API Key"><br>
+<input id="label" placeholder="Label"><br>
+<input id="limit" placeholder="Limit"><br>
+<input id="days" placeholder="Days"><br>
 
-  <pre id="out"></pre>
+<button onclick="create()">Create Key</button>
+<button onclick="load()">Load Keys</button>
+</div>
 
-  <script>
-  function create(){
-    fetch('/admin/create?pass='+pass.value+'&key='+key.value+'&label='+label.value+'&limit='+limit.value+'&days='+days.value)
-    .then(r=>r.json()).then(d=>{
-      alert(JSON.stringify(d));
-      load();
+<pre id="out"></pre>
+
+<script>
+
+function create(){
+  const pass = document.getElementById("pass").value;
+  const key = document.getElementById("key").value;
+  const label = document.getElementById("label").value;
+  const limit = document.getElementById("limit").value;
+  const days = document.getElementById("days").value;
+
+  fetch(\`/admin/create?pass=\${pass}&key=\${key}&label=\${label}&limit=\${limit}&days=\${days}\`)
+  .then(r=>r.json())
+  .then(d=>{
+    alert(JSON.stringify(d));
+    load();
+  });
+}
+
+function load(){
+  fetch('/admin/list')
+  .then(r=>r.json())
+  .then(d=>{
+    let html = "";
+
+    d.forEach(v=>{
+      html += `
+        🔑 ${v.key}
+        📛 ${v.label}
+        📊 Limit: ${v.limit}
+        ⚡ Used: ${v.used}
+        ⏳ Expiry: ${new Date(v.expiry).toLocaleString()}
+        
+        <button onclick="del('${v.key}')">Delete</button>
+        -------------------
+      `;
     });
-  }
 
-  function load(){
-    fetch('/admin/list').then(r=>r.json()).then(d=>{
-      out.innerText = JSON.stringify(d,null,2);
-    });
-  }
+    out.innerText = html;
+  });
+}
 
-  function del(k){
-    fetch('/admin/delete?pass='+pass.value+'&key='+k)
-    .then(()=>load());
-  }
-  </script>
+function del(k){
+  const pass = document.getElementById("pass").value;
+  fetch(\`/admin/delete?pass=\${pass}&key=\${k}\`)
+  .then(()=>load());
+}
+
+</script>
+
+</body>
+</html>
   `);
 });
 
@@ -93,7 +136,7 @@ app.get("/admin/list", async (req,res)=>{
   res.json(data);
 });
 
-// ================= DELETE KEY =================
+// ================= DELETE =================
 app.get("/admin/delete", async (req,res)=>{
   const { pass,key } = req.query;
 
@@ -106,9 +149,10 @@ app.get("/admin/delete", async (req,res)=>{
   res.json({ status:"deleted" });
 });
 
-// ================= USER PANEL (PRO UI) =================
+// ================= USER PANEL =================
 app.get("/user",(req,res)=>{
   res.send(`
+<!DOCTYPE html>
 <html>
 <head>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
@@ -119,16 +163,15 @@ body{
   font-family:sans-serif;
   background:linear-gradient(135deg,#0f172a,#020617);
   color:white;
+  text-align:center;
 }
 
 .card{
-  width:370px;
-  margin:60px auto;
-  background:#111827;
+  width:360px;
+  margin:80px auto;
   padding:20px;
+  background:rgba(255,255,255,0.05);
   border-radius:15px;
-  box-shadow:0 0 25px rgba(0,255,255,0.25);
-  text-align:center;
 }
 
 input{
@@ -137,6 +180,7 @@ input{
   margin:10px 0;
   border:none;
   border-radius:8px;
+  text-align:center;
 }
 
 button{
@@ -149,12 +193,12 @@ button{
   cursor:pointer;
 }
 
-.box{
-  margin-top:15px;
-  background:#0b1220;
+#out{
+  margin-top:10px;
+  text-align:left;
+  background:#111827;
   padding:10px;
   border-radius:10px;
-  text-align:left;
 }
 </style>
 </head>
@@ -162,26 +206,34 @@ button{
 <body>
 
 <div class="card">
-<h2><i class="fa-solid fa-key"></i> API Key Checker</h2>
+
+<h2><i class="fa fa-key"></i> Key Checker</h2>
 
 <input id="k" placeholder="Enter API Key">
-<button onclick="check()">Search Key</button>
+<button onclick="check()">Check</button>
 
-<div class="box" id="out"></div>
+<div id="out">Enter key...</div>
+
 </div>
 
 <script>
 function check(){
-  fetch('/api/status?key='+k.value)
+  fetch('/api/status?key='+document.getElementById("k").value)
   .then(r=>r.json())
   .then(d=>{
+
+    if(d.status === "invalid key"){
+      out.innerHTML = "❌ Invalid Key";
+      return;
+    }
+
     out.innerHTML = `
-      <p>🔑 Key: ${d.key || 'Invalid'}</p>
-      <p>📛 Label: ${d.label || '-'}</p>
-      <p>📊 Limit: ${d.limit || 0}</p>
-      <p>⚡ Used: ${d.used || 0}</p>
-      <p>🟢 Remaining: ${d.remaining || 0}</p>
-      <p>⏳ Expiry: ${d.expiry || '-'}</p>
+      🔑 Key: ${d.key}<br>
+      📛 Label: ${d.label}<br>
+      📊 Limit: ${d.limit}<br>
+      ⚡ Used: ${d.used}<br>
+      🟢 Remaining: ${d.remaining}<br>
+      ⏳ Expiry: ${d.expiry}
     `;
   });
 }
@@ -192,7 +244,7 @@ function check(){
   `);
 });
 
-// ================= STATUS API =================
+// ================= STATUS =================
 app.get("/api/status", async (req,res)=>{
   const u = await User.findOne({ key:req.query.key });
 
@@ -206,8 +258,7 @@ app.get("/api/status", async (req,res)=>{
     limit:u.limit,
     used:u.used,
     remaining:u.limit - u.used,
-    expiry:new Date(u.expiry),
-    percentage_used: Math.floor((u.used/u.limit)*100)+"%"
+    expiry:new Date(u.expiry)
   });
 });
 
