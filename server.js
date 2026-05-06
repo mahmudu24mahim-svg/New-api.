@@ -241,20 +241,114 @@ app.get("/admin/history", (req, res) => {
 
 // ================= USER PANEL =================
 app.get("/user", (req, res) => {
-  res.send(`
-<h2>User Panel</h2>
-<input id="k">
-<button onclick="check()">Check</button>
-<pre id="o"></pre>
+res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>API Key Checker</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+<style>
+body{
+  margin:0;
+  font-family:Segoe UI;
+  background:linear-gradient(135deg,#0f172a,#020617);
+  color:white;
+}
+
+.card{
+  width:380px;
+  margin:100px auto;
+  padding:25px;
+  background:rgba(255,255,255,0.06);
+  border-radius:16px;
+  backdrop-filter:blur(12px);
+  box-shadow:0 0 25px rgba(0,255,255,0.15);
+  text-align:center;
+}
+
+h2{
+  color:#22d3ee;
+}
+
+input{
+  width:90%;
+  padding:12px;
+  margin:10px 0;
+  border:none;
+  border-radius:10px;
+  text-align:center;
+  background:#0b1220;
+  color:white;
+}
+
+button{
+  width:95%;
+  padding:12px;
+  border:none;
+  border-radius:10px;
+  background:linear-gradient(90deg,#06b6d4,#3b82f6);
+  color:white;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+button:hover{transform:scale(1.05);}
+
+#out{
+  margin-top:15px;
+  text-align:left;
+  background:#0b1220;
+  padding:12px;
+  border-radius:10px;
+  border-left:3px solid #22d3ee;
+}
+</style>
+</head>
+
+<body>
+
+<div class="card">
+
+<h2><i class="fa fa-search"></i> KEY CHECKER</h2>
+
+<input id="k" placeholder="Enter API Key">
+<button onclick="check()">Search</button>
+
+<div id="out">🔍 Search a key to view details</div>
+
+</div>
 
 <script>
+
 function check(){
-fetch("/api/status?key="+k.value)
-.then(r=>r.json())
-.then(d=>o.innerText=JSON.stringify(d,null,2))
+  fetch('/api/status?key='+k.value)
+  .then(r=>r.json())
+  .then(d=>{
+
+    if(d.status === "invalid key"){
+      out.innerHTML = "❌ Key Not Found";
+      return;
+    }
+
+    out.innerHTML = `
+      🔑 <b>Key:</b> ${d.key}<br>
+      📛 <b>Label:</b> ${d.label}<br>
+      📊 <b>Limit:</b> ${d.limit}<br>
+      ⚡ <b>Used:</b> ${d.used}<br>
+      🟢 <b>Remaining:</b> ${d.remaining}<br>
+      ⏳ <b>Expiry:</b> ${new Date(d.expiry).toLocaleString()}
+    `;
+  });
 }
+
 </script>
-  `);
+
+</body>
+</html>
+`);
 });
 
 // ================= STATUS =================
