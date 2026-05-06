@@ -1,26 +1,31 @@
 const express = require("express");
 const axios = require("axios");
-const mongoose = require("mongoose");
-const User = require("./db");
+const fs = require("fs-extra");
 
 const app = express();
-
 app.use(express.json());
 
-// ===== CONFIG =====
+// ================= CONFIG =================
 const ADMIN_PASS = "admin123";
 const MAIN_API_KEY = "unknown34";
 
-// ===== DB CONNECT =====
-mongoose.connect("mongodb+srv://Mahim125:125mahim@cluster0.t5lz8wx.mongodb.net/apiDB")
-.then(()=>console.log("DB CONNECTED"))
-.catch(err=>console.log("DB ERROR:", err));
+const DB_FILE = "./db.json";
+
+// ================= DB HELPERS =================
+function loadDB(){
+  if(!fs.existsSync(DB_FILE)) fs.writeJsonSync(DB_FILE,{});
+  return fs.readJsonSync(DB_FILE);
+}
+
+function saveDB(data){
+  fs.writeJsonSync(DB_FILE,data,{spaces:2});
+}
 
 // ================= HOME =================
-app.get("/", (req,res)=>{
+app.get("/",(req,res)=>{
   res.send(`
-    <h2>🚀 API SYSTEM</h2>
-    <a href="/admin">Admin Panel</a> | <a href="/user">User Panel</a>
+  <h2>🚀 SIMPLE API SYSTEM</h2>
+  <a href="/admin">Admin Panel</a> | <a href="/user">User Panel</a>
   `);
 });
 
@@ -32,59 +37,58 @@ app.get("/admin",(req,res)=>{
 <head>
 <style>
 body{background:#0f172a;color:#fff;font-family:sans-serif;text-align:center}
-input,button{padding:10px;margin:5px;width:250px;border-radius:8px;border:none}
+.card{width:360px;margin:60px auto;padding:20px;background:#111827;border-radius:12px}
+input,button{width:90%;padding:10px;margin:6px;border:none;border-radius:8px}
 button{background:#06b6d4;color:#fff;cursor:pointer}
-.card{margin-top:20px}
+pre{text-align:left;background:#000;padding:10px;border-radius:8px}
 </style>
 </head>
 <body>
 
+<div class="card">
+
 <h2>🔥 Admin Panel</h2>
 
-<div class="card">
-<input id="pass" placeholder="Admin Pass"><br>
-<input id="key" placeholder="API Key"><br>
-<input id="label" placeholder="Label"><br>
-<input id="limit" placeholder="Limit"><br>
-<input id="days" placeholder="Days"><br>
+<input id="pass" placeholder="Admin Pass">
+<input id="key" placeholder="API Key">
+<input id="label" placeholder="Label">
+<input id="limit" placeholder="Limit">
+<input id="days" placeholder="Days">
 
-<button onclick="create()">Create Key</button>
-<button onclick="load()">Load Keys</button>
+<button onclick="create()">Create</button>
+<button onclick="load()">Load</button>
+
+<input id="search" placeholder="Search Key">
+<button onclick="find()">Search</button>
+
+<pre id="out">No data</pre>
+
 </div>
-
-<pre id="out"></pre>
 
 <script>
 
 function create(){
-  fetch('/admin/create?pass='+pass.value+'&key='+key.value+'&label='+label.value+'&limit='+limit.value+'&days='+days.value)
-  .then(r=>r.json())
-  .then(d=>{
-    alert(JSON.stringify(d));
-    load();
-  });
+ fetch('/admin/create?pass='+pass.value+'&key='+key.value+'&label='+label.value+'&limit='+limit.value+'&days='+days.value)
+ .then(r=>r.json()).then(d=>{
+   alert(JSON.stringify(d));
+   load();
+ });
 }
 
 function load(){
-  fetch('/admin/list')
-  .then(r=>r.json())
-  .then(d=>{
-    let txt="";
-    d.forEach(v=>{
-      txt += "KEY: "+v.key+"\\n";
-      txt += "LABEL: "+v.label+"\\n";
-      txt += "LIMIT: "+v.limit+"\\n";
-      txt += "USED: "+v.used+"\\n";
-      txt += "EXPIRE: "+new Date(v.expiry).toLocaleString()+"\\n";
-      txt += "-------------------\\n";
-    });
-    out.innerText = txt;
-  });
+ fetch('/admin/list')
+ .then(r=>r.json())
+ .then(d=>{
+   out.innerText = JSON.stringify(d,null,2);
+ });
 }
 
-function del(k){
-  fetch('/admin/delete?pass='+pass.value+'&key='+k)
-  .then(()=>load());
+function find(){
+ fetch('/admin/search?key='+search.value)
+ .then(r=>r.json())
+ .then(d=>{
+   out.innerText = JSON.stringify(d,null,2);
+ });
 }
 
 </script>
@@ -95,49 +99,60 @@ function del(k){
 });
 
 // ================= CREATE KEY =================
-app.get("/admin/create", async (req,res)=>{
-  try{
-    const { pass,key,label,limit,days } = req.query;
+app.get("/admin/create",(req,res)=>{
 
-    if(pass !== ADMIN_PASS)
-      return res.json({ status:"error", msg:"wrong admin pass" });
-
-    if(!key || !limit || !days)
-      return res.json({ status:"error", msg:"missing fields" });
-
-    const exist = await User.findOne({ key });
-    if(exist)
-      return res.json({ status:"error", msg:"key already exists" });
-
-    const user = await User.create({
-      key,
-      label: label || "user",
-      limit: Number(limit),
-      used: 0,
-      expiry: Date.now() + Number(days)*86400000
-    });
-
-    res.json({ status:"success", key:user.key });
-
-  }catch(e){
-    res.json({ status:"error", msg:e.message });
+  if(req.query.pass !== ADMIN_PASS){
+    return res.json({ error:"wrong pass" });
   }
+
+  const db = loadDB();
+
+  const { key,label,limit,days } = req.query;
+
+  if(!key || !limit || !days){
+    return res.json({ error:"missing fields" });
+  }
+
+  db[key] = {
+    label: label || "user",
+    limit: Number(limit),
+    used: 0,
+    expiry: Date.now() + Number(days)*86400000
+  };
+
+  saveDB(db);
+
+  res.json({ status:"created", key });
 });
 
 // ================= LIST =================
-app.get("/admin/list", async (req,res)=>{
-  const data = await User.find();
-  res.json(data);
+app.get("/admin/list",(req,res)=>{
+  res.json(loadDB());
+});
+
+// ================= SEARCH =================
+app.get("/admin/search",(req,res)=>{
+
+  const db = loadDB();
+  const key = req.query.key;
+
+  if(!db[key]){
+    return res.json({ status:"not found" });
+  }
+
+  res.json({ key, ...db[key] });
 });
 
 // ================= DELETE =================
-app.get("/admin/delete", async (req,res)=>{
-  const { pass,key } = req.query;
+app.get("/admin/delete",(req,res)=>{
 
-  if(pass !== ADMIN_PASS)
+  if(req.query.pass !== ADMIN_PASS){
     return res.json({ error:"wrong pass" });
+  }
 
-  await User.deleteOne({ key });
+  const db = loadDB();
+  delete db[req.query.key];
+  saveDB(db);
 
   res.json({ status:"deleted" });
 });
@@ -150,8 +165,8 @@ app.get("/user",(req,res)=>{
 <head>
 <style>
 body{background:#020617;color:#fff;font-family:sans-serif;text-align:center}
-.card{width:360px;margin:80px auto;padding:20px;background:#111827;border-radius:12px}
-input,button{padding:10px;margin:8px;width:90%;border:none;border-radius:8px}
+.card{width:350px;margin:70px auto;padding:20px;background:#111827;border-radius:12px}
+input,button{width:90%;padding:10px;margin:8px;border:none;border-radius:8px}
 button{background:#06b6d4;color:#fff}
 #out{text-align:left;margin-top:10px}
 </style>
@@ -159,33 +174,35 @@ button{background:#06b6d4;color:#fff}
 <body>
 
 <div class="card">
+
 <h2>🔑 Key Checker</h2>
 
 <input id="k" placeholder="Enter Key">
 <button onclick="check()">Check</button>
 
-<div id="out">Enter key...</div>
+<div id="out">Waiting...</div>
+
 </div>
 
 <script>
 function check(){
-  fetch('/api/status?key='+k.value)
-  .then(r=>r.json())
-  .then(d=>{
+ fetch('/api/status?key='+k.value)
+ .then(r=>r.json())
+ .then(d=>{
 
-    if(d.status==="invalid key"){
-      out.innerHTML="❌ Invalid Key";
-      return;
-    }
+   if(d.status==="invalid"){
+     out.innerHTML="❌ Key Not Found";
+     return;
+   }
 
-    out.innerHTML =
-    "KEY: "+d.key+"<br>"+
-    "LABEL: "+d.label+"<br>"+
-    "LIMIT: "+d.limit+"<br>"+
-    "USED: "+d.used+"<br>"+
-    "REMAIN: "+d.remaining+"<br>"+
-    "EXPIRE: "+d.expiry;
-  });
+   out.innerHTML =
+   "KEY: "+d.key+"<br>"+
+   "LABEL: "+d.label+"<br>"+
+   "LIMIT: "+d.limit+"<br>"+
+   "USED: "+d.used+"<br>"+
+   "REMAIN: "+d.remaining+"<br>"+
+   "EXPIRE: "+new Date(d.expiry);
+ });
 }
 </script>
 
@@ -195,50 +212,57 @@ function check(){
 });
 
 // ================= STATUS =================
-app.get("/api/status", async (req,res)=>{
-  const u = await User.findOne({ key:req.query.key });
+app.get("/api/status",(req,res)=>{
 
-  if(!u) return res.json({ status:"invalid key" });
+  const db = loadDB();
+  const u = db[req.query.key];
+
+  if(!u){
+    return res.json({ status:"invalid" });
+  }
 
   res.json({
-    key:u.key,
+    key:req.query.key,
     label:u.label,
     limit:u.limit,
     used:u.used,
     remaining:u.limit - u.used,
-    expiry:new Date(u.expiry)
+    expiry:u.expiry
   });
 });
 
 // ================= SEND API =================
-app.get("/api/send", async (req,res)=>{
+app.get("/api/send",(req,res)=>{
+
+  const db = loadDB();
   const { key,number,msg } = req.query;
 
-  const u = await User.findOne({ key });
+  const u = db[key];
 
   if(!u) return res.json({ status:"invalid key" });
   if(Date.now() > u.expiry) return res.json({ status:"expired" });
   if(u.used >= u.limit) return res.json({ status:"limit reached" });
 
   u.used++;
-  await u.save();
+  db[key] = u;
+  saveDB(db);
 
-  try{
-    const url = `http://xlahr.pro.bd/Key/sub.php?key=${MAIN_API_KEY}&number=${number}&msg=${msg}`;
-    const r = await axios.get(url);
-
+  axios.get(`http://xlahr.pro.bd/Key/sub.php?key=${MAIN_API_KEY}&number=${number}&msg=${msg}`)
+  .then(r=>{
     res.json({
       status:"success",
       data:r.data,
       used:u.used,
       remaining:u.limit - u.used
     });
+  })
+  .catch(()=>{
+    res.json({ status:"api failed" });
+  });
 
-  }catch(e){
-    res.json({ status:"main api failed" });
-  }
 });
 
 // ================= START =================
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, ()=>console.log("🚀 SYSTEM RUNNING"));
+app.listen(process.env.PORT || 3000, ()=>{
+  console.log("🚀 SYSTEM RUNNING");
+});
